@@ -1,4 +1,4 @@
-version: '3.8'
+
 services:
   localstack:
     image: localstack/localstack:1.2.0
@@ -20,7 +20,21 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
       - NUM_ITERATIONS=10
-      # Adjust DATASET_SIZE_MB as needed for scalability testing.
       - DATASET_SIZE_MB=1
     depends_on:
       - localstack
+
+  etl-pipeline:
+    build: ./populate-script
+    volumes:
+      - ./pipeline.py:/app/pipeline.py:ro
+    working_dir: /app
+    command: python pipeline.py
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      - localstack
+    profiles:
+      - etl

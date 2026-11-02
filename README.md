@@ -86,9 +86,7 @@ docker compose run --rm article-publisher
 Run the ETL pipeline:
 
 ```bash
-docker compose run --rm --no-deps \
-  -v "$PWD/pipeline.py:/app/pipeline.py:ro" \
-  article-publisher python pipeline.py
+docker compose run --rm etl-pipeline
 ```
 
 Verify the generated files:
@@ -99,6 +97,8 @@ docker compose exec localstack \
 ```
 
 ### Storage Design for Machine Learning
+
+Each pipeline execution generates a unique run identifier and stores enriched articles under `training-data/run-<RUN_ID>/batch-XXXXX.jsonl`. This prevents output files from being overwritten across executions and keeps each processing run logically separated. Reprocessing the same Kinesis records can still create duplicate data across different run folders; production deduplication would require persistent record tracking or checkpoints.
 
 The enriched articles are stored as JSONL files, allowing downstream training jobs to read individual records sequentially.
 
@@ -126,7 +126,7 @@ For larger datasets, the storage design could be extended with compression, date
 - Records are assumed to contain valid JSON.
 - Word count uses whitespace-separated tokens rather than an NLP tokenizer.
 - The implementation does not yet provide durable checkpoints, deduplication, or exactly-once processing.
-- Repeated executions may overwrite existing batch filenames.
+- Repeated executions create separate run folders but may duplicate previously processed records.
 - For production-scale streaming, Apache Flink or Spark Structured Streaming could provide distributed processing, state management, and checkpointing.
 
 ### Local Test Results

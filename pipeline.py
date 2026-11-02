@@ -2,6 +2,7 @@
 import boto3
 import json
 import time
+from uuid import uuid4
 
 # Connect to LocalStack
 config = {
@@ -17,11 +18,13 @@ s3 = boto3.client("s3", **config)
 STREAM_NAME = "MyStream"
 BUCKET_NAME = "my-bucket"
 BATCH_SIZE = 500
+RUN_ID = uuid4().hex
 
 total_articles = 0
 total_words = 0
 batch_number = 0
 articles = []
+
 
 
 def save_batch(batch):
@@ -32,7 +35,7 @@ def save_batch(batch):
 
     batch_number += 1
 
-    key = f"training-data/batch-{batch_number:05d}.jsonl"
+    key = f"training-data/run-{RUN_ID}/batch-{batch_number:05d}.jsonl"
 
     body = "\n".join(
         json.dumps(article) for article in batch
