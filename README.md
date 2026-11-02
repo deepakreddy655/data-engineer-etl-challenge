@@ -44,3 +44,93 @@ We understand that real-world data engineering projects often require dealing wi
 ## Submission Instructions
 
 Clone this repository to download the boiler plate. Build your application based on this foundation and update the README accordingly. Submit your completed challenge via email.
+
+## Implemented Solution
+
+### Architecture
+
+The solution implements a batch-oriented ETL pipeline using Python, Boto3, Docker, and LocalStack.
+
+**Data flow:**
+
+Article Publisher → Kinesis (`MyStream`) → Python ETL Pipeline → S3 (`my-bucket`) → Downstream ML Training
+
+### Data Processing
+
+The pipeline:
+
+1. Discovers Kinesis shards and reads available records in batches.
+2. Parses each JSON article and calculates its word count using whitespace tokenization.
+3. Computes the average word count across all successfully processed records.
+4. Writes enriched articles to S3 in batches of up to 500 records.
+5. Stores output in JSON Lines (JSONL) format under `training-data/`.
+
+The calculated average is printed to the terminal and is not stored.
+
+### Setup and Execution
+
+**Prerequisites:** Docker Desktop and Docker Compose.
+
+Start LocalStack:
+
+```bash
+docker compose up -d localstack
+```
+
+Populate the Kinesis stream and create the S3 bucket:
+
+```bash
+docker compose run --rm article-publisher
+```
+
+Run the ETL pipeline:
+
+```bash
+docker compose run --rm --no-deps \
+  -v "$PWD/pipeline.py:/app/pipeline.py:ro" \
+  article-publisher python pipeline.py
+```
+
+Verify the generated files:
+
+```bash
+docker compose exec localstack \
+  awslocal s3 ls s3://my-bucket/training-data/
+```
+
+### Storage Design for Machine Learning
+
+The enriched articles are stored as JSONL files, allowing downstream training jobs to read individual records sequentially.
+
+Batching reduces the number of S3 write operations compared with uploading every article individually. Each output file contains up to 500 enriched records.
+
+For larger datasets, the storage design could be extended with compression, date-based partitions, and columnar formats such as Parquet.
+
+### Design Decisions
+
+**Python and Boto3:** Selected to keep the implementation lightweight, understandable, and compatible with the provided Docker environment.
+
+**Kinesis:** Simulates ingestion of streaming article data.
+
+**S3:** Provides object storage suitable for downstream data processing and ML training.
+
+**Batch processing:** Limits in-memory accumulation of enriched articles and reduces S3 request overhead.
+
+**JSONL:** Preserves article text and metadata in a format that is straightforward to consume in NLP training workflows.
+
+### Assumptions and Limitations
+
+- The pipeline processes a finite snapshot of the stream rather than running indefinitely.
+- Three consecutive empty reads are used as the stopping condition for each shard.
+- The publisher is expected to finish before the pipeline runs.
+- Records are assumed to contain valid JSON.
+- Word count uses whitespace-separated tokens rather than an NLP tokenizer.
+- The implementation does not yet provide durable checkpoints, deduplication, or exactly-once processing.
+- Repeated executions may overwrite existing batch filenames.
+- For production-scale streaming, Apache Flink or Spark Structured Streaming could provide distributed processing, state management, and checkpointing.
+
+### Local Test Results
+
+A successful local execution processed **9,381 articles**, calculated an average word count of **138.04**, and stored **19 JSONL batches** in `s3://my-bucket/training-data/`.
+
+An enriched article was retrieved from S3 and verified to contain the additional `word_count` field.
